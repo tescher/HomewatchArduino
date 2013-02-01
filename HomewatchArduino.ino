@@ -6,6 +6,12 @@
 #include <avr/wdt.h>
 #include <EEPROM.h>   ;*TWE++ 4/8/12 Read config from EEPROM rather than hard coded
 
+#define MAX_SENSORS 2
+#define REQUEST_KEY_MAGIC 271
+#define fileKey 12345   //Secret for filing data
+#define ONE_WIRE_PIN 9  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
+#define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
+
 // Default config info in case nothing is in the EEPROM
 byte mac[] = { 
   0x90, 0xA2, 0xDA, 0x00, 0x30, 0x7D };
@@ -13,15 +19,10 @@ char server[25] = "www.escherhomewatch.com";   // Up to 24 characters for the se
 char controller[30] = "BasementArduino";  //ID for this sensor controller, up to 29 chars
 
 
-const int MAX_SENSORS = 2;
-const int REQUEST_KEY_MAGIC = 271;
 int sensorCount = 0;
 EthernetClient client;
 int minInterval=32767;     //Minimum measurement interval from our sensor list. This will be used for everyone.
-unsigned int fileKey = 12345;   //Secret for filing data
-const int ONE_WIRE_PIN = 9;  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
 OneWire ds(ONE_WIRE_PIN);
-const int WD_INTERVAL = 500;  //Milliseconds between each Watchdog Timer reset
 struct sensorConfig {
   int id;
   unsigned int addressH;
@@ -178,15 +179,15 @@ void sendValue(int sensorID, float value) {
 
   delay_with_wd(1000);
 
-  if (client.connect(server, 80)) {
+  if (client.connect(server, 3000)) {
     // Serial.println("connected");
 
     client.print("POST http://");
     Serial.print("POST http://");
     client.print(server);
     Serial.print(server);
-    client.print("/measurements/file?sensor_id=");
-    Serial.print("/measurements/file?sensor_id=");
+    client.print("/measurements?sensor_id=");
+    Serial.print("/measurements?sensor_id=");
     client.print(sensorID);
     Serial.print(sensorID);
     dtostrf(value, 3, 1, buf);
@@ -199,7 +200,8 @@ void sendValue(int sensorID, float value) {
     client.print(request_key(buf));
     Serial.print(request_key(buf));
     client.println(" HTTP/1.0");
-    Serial.println(" HTTP/1.0");
+    client.println("Content-Length: 0");
+    Serial.println(" HTTP/1.0 Content-Length: 0");
     client.println();
     Serial.println();
   } 
@@ -210,12 +212,12 @@ void sendValue(int sensorID, float value) {
       ;
   }
 
-  while ((!client.available()) && (fail < 50)) {
+  while ((!client.available()) && (fail < 500)) {
     delay_with_wd(100);
     fail++;
   }
 
-  if (fail >= 50) {
+  if (fail >= 500) {
     for(;;)
       ;
   }    
@@ -223,10 +225,26 @@ void sendValue(int sensorID, float value) {
   //   delay_with_wd(1);
   // }
 
-  while (client.connected()) {
+  while (client.connected()) {  // Check for success on file. If fails, reset
+    bool success = false;
+    int msg_cnt = 0;
+    char msg[8] = "success";
     while(client.available()) {
       char c = client.read();
+      if (c == msg[msg_cnt++]) {
+        Serial.print(c);
+        if (msg_cnt == 7) {
+          success = true;
+          Serial.println("Success!");
+        }
+      } else {
+        msg_cnt = 0;
+      }
       Serial.print(c);
+    }
+    if (success == false) {
+      for(;;)
+        ;
     }
   }
 
@@ -262,7 +280,7 @@ void setup() {
   // Get the sensor config information
   Serial.println("connecting...");
 
-  if (client.connect(server, 80)) {
+  if (client.connect(server, 3000)) {
     // Serial.println("connected");
 
     client.print("GET http://");
@@ -408,7 +426,9 @@ void querySensors(OneWire ds) {
         Serial.println(value);
         Serial.print("Sensor ID: ");
         Serial.println(sensors[i].id);
-        sendValue(sensors[i].id, value);
+        if (value < 180) {  // Skip spurious startup values
+          sendValue(sensors[i].id, value);
+        }
         found = true;
         wdt_reset();
       }
@@ -426,7 +446,7 @@ void loop()
   delay_with_wd(minInterval);
 }
 
-int request_key(char *str)
+unsigned int request_key(char *str)
 {
   int key = 0;
   for (int i=0; str[i] != 0x00; i++) {
