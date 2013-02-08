@@ -179,7 +179,7 @@ void sendValue(int sensorID, float value) {
 
   delay_with_wd(1000);
 
-  if (client.connect(server, 3000)) {
+  if (client.connect(server, 80)) {
     // Serial.println("connected");
 
     client.print("POST http://");
@@ -280,7 +280,7 @@ void setup() {
   // Get the sensor config information
   Serial.println("connecting...");
 
-  if (client.connect(server, 3000)) {
+  if (client.connect(server, 80)) {
     // Serial.println("connected");
 
     client.print("GET http://");
