@@ -392,6 +392,11 @@ void setup() {
   client.stop();
   delay_with_wd(1000);
 
+  if (sensorCount < 1) {
+    Serial.println("No sensors received");
+        for(;;)
+      ;
+  }
 
   // Parse the sensor info
   // configInput.toCharArray(buff, 1000);
