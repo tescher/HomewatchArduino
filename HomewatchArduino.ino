@@ -20,6 +20,7 @@ char controller[30] = "BasementArduino";  //ID for this sensor controller, up to
 
 
 int sensorCount = 0;
+boolean int_is_seconds = false;
 EthernetClient client;
 int minInterval=32767;     //Minimum measurement interval from our sensor list. This will be used for everyone.
 OneWire ds(ONE_WIRE_PIN);
@@ -46,7 +47,7 @@ void delay_with_wd(int ms) {
   int loop_count = ms / WD_INTERVAL;
   int leftover = ms % WD_INTERVAL;
 
-  for (int i; i < loop_count; i++) {
+  for (int i=0; i < loop_count; i++) {
     delay(WD_INTERVAL);
     wdt_reset();
   }
@@ -367,7 +368,13 @@ void setup() {
           if (bComp(key,"id")) sensors[sensorCount-1].id = atoi(value);
           else if (bComp(key,"addressH")) sensors[sensorCount-1].addressH = atoi(value);
           else if (bComp(key,"addressL")) sensors[sensorCount-1].addressL = atoi(value);
-          else if (bComp(key,"interval")) sensors[sensorCount-1].interval = atoi(value);
+          else if (bComp(key,"interval")) {
+            if (value[i-1] == 's') {
+              int_is_seconds = true;
+              value[i-1] = 0x00;
+            }
+            sensors[sensorCount-1].interval = atoi(value);
+          }
         } 
         else value[i++] = c;
       } 
@@ -448,7 +455,14 @@ void loop()
   querySensors(ds);
 
   ds.reset_search();
-  delay_with_wd(minInterval);
+  if (int_is_seconds) {
+    for (int i=0; i < minInterval; i++) {
+      delay_with_wd(1000);
+      Serial.println(i);
+    }
+  } else {
+    delay_with_wd(minInterval);
+  }
 }
 
 unsigned int request_key(char *str)
