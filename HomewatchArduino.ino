@@ -10,6 +10,7 @@
 #define REQUEST_KEY_MAGIC 271
 #define fileKey 12345   //Secret for filing data
 #define ONE_WIRE_PIN 9  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
+#define GENERIC_PIN 3   //Where a generic sensor will be connected - one per board max
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
 
 // Default config info in case nothing is in the EEPROM
@@ -20,6 +21,7 @@ char controller[30] = "BasementArduino";  //ID for this sensor controller, up to
 
 
 int sensorCount = 0;
+boolean haveOneWire = false;  // Flag to say that we should be getting data from One-Wire sensors
 boolean int_is_seconds = false;
 EthernetClient client;
 int minInterval=32767;     //Minimum measurement interval from our sensor list. This will be used for everyone.
@@ -29,6 +31,7 @@ struct sensorConfig {
   unsigned int addressH;
   unsigned int addressL;
   unsigned int interval;
+  unsigned int type;      // 0-generic, 1-OneWIre
 };
 struct sensorConfig sensors[MAX_SENSORS];
 
@@ -285,19 +288,19 @@ void setup() {
     // Serial.println("connected");
 
     client.print("GET http://");
-    Serial.print("GET http://");
+    // Serial.print("GET http://");
     client.print(server);
-    Serial.print(server);
+    // Serial.print(server);
     client.print("/sensors/getconfig?cntrl=");
-    Serial.print("/sensors/getconfig?cntrl=");
+    // Serial.print("/sensors/getconfig?cntrl=");
     client.print(controller);
-    Serial.print(controller);
+    // Serial.print(controller);
     client.print("&key=");
-    Serial.print("&key=");
+    // Serial.print("&key=");
     client.print(request_key(controller));
-    Serial.print(request_key(controller));
+    // Serial.print(request_key(controller));
     client.println(" HTTP/1.0");
-    Serial.println(" HTTP/1.0");
+    // Serial.println(" HTTP/1.0");
     client.println();
   } 
   else {
@@ -375,8 +378,12 @@ void setup() {
             }
             sensors[sensorCount-1].interval = atoi(value);
           }
-        } 
-        else value[i++] = c;
+          else if (bComp(key,"type") && (value[0] == 'd') && (value[1] == 's')) {
+            haveOneWire = true;
+            sensors[sensorCount-1].type = 1; 
+          } 
+          else value[i++] = c;
+        }
       } 
       else if (objectStarted & !keyStarted && (c == '}')) {
         objectStarted = false;
@@ -398,12 +405,13 @@ void setup() {
 
   client.stop();
   delay_with_wd(1000);
-
+  
   if (sensorCount < 1) {
     Serial.println("No sensors received");
         for(;;)
       ;
   }
+ 
 
   // Parse the sensor info
   // configInput.toCharArray(buff, 1000);
@@ -418,10 +426,13 @@ void setup() {
     Serial.print(sensors[i].addressL);
     Serial.print(":");
     Serial.println(sensors[i].interval);
+    Serial.print(":");
+    Serial.println(sensors[i].type);
+    
   }
 }
 
-void querySensors(OneWire ds) {
+void querydsSensors(OneWire ds) {
   // Deal with any DS18S20 sensors connected
   byte addr[8];   
   float value;
@@ -429,10 +440,10 @@ void querySensors(OneWire ds) {
 
   while (ds.search(addr)) {
     bool found = false;
+    addrL = (addr[1] << 8) | addr[0];
+    addrH = (addr[3] << 8) | addr[2];
     for (int i=0; (i < sensorCount) && !found; i++) {  //Find the matching config
-      addrL = (addr[1] << 8) | addr[0];
-      addrH = (addr[3] << 8) | addr[2];
-      if ((sensors[i].addressL == addrL) && (sensors[i].addressH == addrH)) {  //Found our config
+      if ((sensors[i].type == 1) && (sensors[i].addressL == addrL) && (sensors[i].addressH == addrH)) {  //Found our config
         value = getDSValue(ds, addr);
         Serial.print("Value: ");
         Serial.println(value);
@@ -452,9 +463,25 @@ void loop()
 {
   // Serial.println("Free Memory: "+String(freeMemory()));
 
-  querySensors(ds);
+  if (haveOneWire) {
+    querydsSensors(ds);
+    ds.reset_search();
+  }
+  
+  for (int i=0; (i < sensorCount); i++) {
+    if (sensors[i].type != 1) {
+      float value = analogRead(GENERIC_PIN);
+      Serial.print("Value: ");
+      Serial.println(value);
+      Serial.print("Sensor ID: ");
+      Serial.println(sensors[i].id);
+      sendValue(sensors[i].id, value);
+      wdt_reset();
+    }
+  }  
+  
+  
 
-  ds.reset_search();
   if (int_is_seconds) {
     for (int i=0; i < minInterval; i++) {
       delay_with_wd(1000);
