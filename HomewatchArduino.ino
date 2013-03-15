@@ -382,8 +382,8 @@ void setup() {
             haveOneWire = true;
             sensors[sensorCount-1].type = 1; 
           } 
-          else value[i++] = c;
         }
+        else value[i++] = c;
       } 
       else if (objectStarted & !keyStarted && (c == '}')) {
         objectStarted = false;
