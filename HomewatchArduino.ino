@@ -6,7 +6,7 @@
 #include <avr/wdt.h>
 #include <EEPROM.h>   ;*TWE++ 4/8/12 Read config from EEPROM rather than hard coded
 
-#define MAX_SENSORS 2
+#define MAX_SENSORS 4
 #define REQUEST_KEY_MAGIC 271
 #define fileKey 12345   //Secret for filing data
 #define ONE_WIRE_PIN 9  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
