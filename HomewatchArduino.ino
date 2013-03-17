@@ -10,7 +10,6 @@
 #define REQUEST_KEY_MAGIC 271
 #define fileKey 12345   //Secret for filing data
 #define ONE_WIRE_PIN 9  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
-#define GENERIC_PIN 3   //Where a generic sensor will be connected - one per board max
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
 
 // Default config info in case nothing is in the EEPROM
@@ -470,7 +469,7 @@ void loop()
   
   for (int i=0; (i < sensorCount); i++) {
     if (sensors[i].type != 1) {
-      float value = analogRead(GENERIC_PIN);
+      float value = analogRead(sensors[i].addressL);   //Pin specified in addressL
       Serial.print("Value: ");
       Serial.println(value);
       Serial.print("Sensor ID: ");
