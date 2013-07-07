@@ -100,15 +100,15 @@ float getDSValue(OneWire ds, byte addr[8]) {
   // the first ROM byte indicates which chip
   switch (addr[0]) {
   case 0x10:
-    Serial.println("  Chip = DS18S20");  // or old DS1820
+    // Serial.println("  Chip = DS18S20");  // or old DS1820
     type_s = 1;
     break;
   case 0x28:
-    Serial.println("  Chip = DS18B20");
+    // Serial.println("  Chip = DS18B20");
     type_s = 0;
     break;
   case 0x22:
-    Serial.println("  Chip = DS1822");
+    // Serial.println("  Chip = DS1822");
     type_s = 0;
     break;
   default:
@@ -136,7 +136,7 @@ float getDSValue(OneWire ds, byte addr[8]) {
   }
   // Serial.print(" CRC=");
   // Serial.print(OneWire::crc8(data, 8), HEX);
-  // Serial.println();
+  Serial.println();
 
   // convert the data to actual temperature
 
@@ -441,6 +441,10 @@ void querydsSensors(OneWire ds) {
     bool found = false;
     addrL = (addr[1] << 8) | addr[0];
     addrH = (addr[3] << 8) | addr[2];
+    Serial.print("AddrL: ");
+    Serial.print(addrL);
+    Serial.print(" AddrH: ");
+    Serial.println(addrH);
     for (int i=0; (i < sensorCount) && !found; i++) {  //Find the matching config
       if ((sensors[i].type == 1) && (sensors[i].addressL == addrL) && (sensors[i].addressH == addrH)) {  //Found our config
         value = getDSValue(ds, addr);
