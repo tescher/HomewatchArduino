@@ -11,13 +11,14 @@
 #define fileKey 12345   //Secret for filing data
 #define ONE_WIRE_PIN 9  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
+#define CODE_LOG_LOC 100   //Location in the EEPROM where to store the current execution point
 
 // Default config info in case nothing is in the EEPROM
 byte mac[] = { 
   0x90, 0xA2, 0xDA, 0x00, 0x30, 0x7D };
 char server[25] = "www.escherhomewatch.com";   // Up to 24 characters for the server name
 char controller[30] = "BasementArduino";  //ID for this sensor controller, up to 29 chars
-
+int last_code_log;
 
 int sensorCount = 0;
 boolean haveOneWire = false;  // Flag to say that we should be getting data from One-Wire sensors
@@ -89,6 +90,16 @@ void getEEPROM() {
   }
 }
 
+// Store a marker where we are so when we restart we can log where we hung up
+
+void code_log(byte location) {
+  EEPROM.write(CODE_LOG_LOC, location);
+}
+
+int get_code_log() {
+  return (EEPROM.read(CODE_LOG_LOC) & 0x00FF);
+}
+  
 // Read value from a DS OneWire sensor
 float getDSValue(OneWire ds, byte addr[8]) {
   byte i;
@@ -180,10 +191,12 @@ void sendValue(int sensorID, float value) {
   //  delay(2000);  // No watchdog reset here, want to reset the board if it fails repeatedly
   //}
 
+  code_log(15);
   delay_with_wd(1000);
 
   if (client.connect(server, 80)) {
     // Serial.println("connected");
+    code_log(16);
 
     client.print("POST http://");
     Serial.print("POST http://");
@@ -210,16 +223,19 @@ void sendValue(int sensorID, float value) {
   } 
   else {
     // if you didn't get a connection to the server:
+    code_log(17);
     Serial.println("connection failed");
     for(;;)
       ;
   }
 
+  code_log(18);
   while ((!client.available()) && (fail < 500)) {
     delay_with_wd(100);
     fail++;
   }
 
+  code_log(19);
   if (fail >= 500) {
     for(;;)
       ;
@@ -228,10 +244,12 @@ void sendValue(int sensorID, float value) {
   //   delay_with_wd(1);
   // }
 
+  code_log(20);
+  bool success = false;
   while (client.connected()) {  // Check for success on file. If fails, reset
-    bool success = false;
     int msg_cnt = 0;
     char msg[8] = "success";
+    code_log(21);
     while(client.available()) {
       char c = client.read();
       if (c == msg[msg_cnt++]) {
@@ -245,10 +263,11 @@ void sendValue(int sensorID, float value) {
       }
       Serial.print(c);
     }
-    if (success == false) {
-      for(;;)
-        ;
-    }
+  }
+  if (success == false) {
+    code_log(22);
+    for(;;)
+      ;
   }
 
 
@@ -256,13 +275,16 @@ void sendValue(int sensorID, float value) {
   //   Serial.println("Waiting for server to disconnect");
   // }
 
-
+  code_log(23);
   client.stop();
 }
 
 void setup() {
   // start the serial library:
   Serial.begin(9600);
+  
+  // Find out where we crashed
+  last_code_log = get_code_log();
 
   // Get the connection config values
   getEEPROM();
@@ -270,13 +292,22 @@ void setup() {
   // Start the watchdog
   wdt_enable(WDTO_8S);
 
-  // start the Ethernet connection:
+  // start the Ethernet connection, try up to 5 times
   Serial.println("Attempting to configure Ethernet...");
-  while (Ethernet.begin(mac) == 0) {
+  code_log(1);
+  int eth_retry = 0;
+  while ((Ethernet.begin(mac) == 0) && (eth_retry < 6)) {
     Serial.println("Failed to configure Ethernet using DHCP");
     Serial.println("retrying...");
     delay_with_wd(5000);
+    eth_retry++;
   }
+  if (eth_retry > 5) {
+    code_log(24);
+    for (;;)
+      ;
+   }
+  
   // give the Ethernet shield a second to initialize:
   delay_with_wd(1000);
 
@@ -284,6 +315,7 @@ void setup() {
   Serial.println("connecting...");
 
   if (client.connect(server, 80)) {
+    code_log(2);
     // Serial.println("connected");
 
     client.print("GET http://");
@@ -298,11 +330,14 @@ void setup() {
     // Serial.print("&key=");
     client.print(request_key(controller));
     // Serial.print(request_key(controller));
+    client.print("&log=Code%20restarted%20from%20location%20");
+    client.print(last_code_log);
     client.println(" HTTP/1.0");
     // Serial.println(" HTTP/1.0");
     client.println();
   } 
   else {
+    code_log(3);
     // if you didn't get a connection to the server:
     Serial.println("connection failed");
     for(;;)
@@ -320,7 +355,9 @@ void setup() {
   char value[20];
   int i = 0;
   while (client.connected()) {
+    code_log(4);
     if (client.available()) {
+      code_log(5);
       char c = client.read();
       Serial.print(c);
       if (!jsonStarted && (c == '[')) {
@@ -392,20 +429,24 @@ void setup() {
       }
     } 
     else {
+      code_log(6);
       Serial.println("No more data, waiting for server to disconnect");
       delay_with_wd(1000);
     }
   }
 
   while (client.available()) {
+    code_log(7);
     char c = client.read();  //Just clean up anything left
     // Serial.print(c);
   }
-
+  
+  code_log(8);
   client.stop();
   delay_with_wd(1000);
   
   if (sensorCount < 1) {
+    code_log(9);
     Serial.println("No sensors received");
         for(;;)
       ;
@@ -438,6 +479,7 @@ void querydsSensors(OneWire ds) {
   unsigned int addrL, addrH;
 
   while (ds.search(addr)) {
+    code_log(10);
     bool found = false;
     addrL = (addr[1] << 8) | addr[0];
     addrH = (addr[3] << 8) | addr[2];
@@ -467,10 +509,12 @@ void loop()
   // Serial.println("Free Memory: "+String(freeMemory()));
 
   if (haveOneWire) {
+    code_log(11);
     querydsSensors(ds);
     ds.reset_search();
   }
   
+  code_log(12);
   for (int i=0; (i < sensorCount); i++) {
     if (sensors[i].type != 1) {
       float value = analogRead(sensors[i].addressL);   //Pin specified in addressL
@@ -486,11 +530,13 @@ void loop()
   
 
   if (int_is_seconds) {
+    code_log(13);
     for (int i=0; i < minInterval; i++) {
       delay_with_wd(1000);
       Serial.println(i);
     }
   } else {
+    code_log(14);
     delay_with_wd(minInterval);
   }
 }
