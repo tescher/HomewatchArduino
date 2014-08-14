@@ -216,8 +216,13 @@ void sendValue(int sensorID, float value) {
     client.print(request_key(buf));
     Serial.print(request_key(buf));
     client.println(" HTTP/1.0");
+    Serial.println(" HTTP/1.0");
+    client.print("Host: ");
+    Serial.print("Host: ");
+    client.println(server);
+    Serial.println(server);
     client.println("Content-Length: 0");
-    Serial.println(" HTTP/1.0 Content-Length: 0");
+    Serial.println("Content-Length: 0");
     client.println();
     Serial.println();
   } 
@@ -318,22 +323,26 @@ void setup() {
     code_log(2);
     // Serial.println("connected");
 
-    client.print("GET http://");
-    // Serial.print("GET http://");
-    client.print(server);
-    // Serial.print(server);
+    client.print("GET ");
+    Serial.print("GET ");
     client.print("/sensors/getconfig?cntrl=");
-    // Serial.print("/sensors/getconfig?cntrl=");
+    Serial.print("/sensors/getconfig?cntrl=");
     client.print(controller);
-    // Serial.print(controller);
+    Serial.print(controller);
     client.print("&key=");
-    // Serial.print("&key=");
+    Serial.print("&key=");
     client.print(request_key(controller));
-    // Serial.print(request_key(controller));
+    Serial.print(request_key(controller));
     client.print("&log=Code%20restarted%20from%20location%20");
+    Serial.print("&log=Code%20restarted%20from%20location%20");
     client.print(last_code_log);
+    Serial.print(last_code_log);
     client.println(" HTTP/1.0");
-    // Serial.println(" HTTP/1.0");
+    Serial.println(" HTTP/1.0");
+    client.print("Host: ");
+    Serial.print("Host: ");
+    client.println(server);
+    Serial.println(server);
     client.println();
   } 
   else {
@@ -438,7 +447,7 @@ void setup() {
   while (client.available()) {
     code_log(7);
     char c = client.read();  //Just clean up anything left
-    // Serial.print(c);
+    Serial.print(c);
   }
   
   code_log(8);
