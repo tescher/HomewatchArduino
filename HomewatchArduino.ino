@@ -12,13 +12,14 @@
 #define ONE_WIRE_PIN 9  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
 #define CODE_LOG_LOC 100   //Location in the EEPROM where to store the current execution point
+// #define DEBUG         // Conditional Compilation
 
 // Default config info in case nothing is in the EEPROM
 byte mac[] = { 
   0x90, 0xA2, 0xDA, 0x00, 0x30, 0x7D };
 char server[25] = "www.escherhomewatch.com";   // Up to 24 characters for the server name
 char controller[30] = "BasementArduino";  //ID for this sensor controller, up to 29 chars
-int last_code_log;
+int last_code_log = 255;
 
 int sensorCount = 0;
 boolean haveOneWire = false;  // Flag to say that we should be getting data from One-Wire sensors
@@ -123,7 +124,9 @@ float getDSValue(OneWire ds, byte addr[8]) {
     type_s = 0;
     break;
   default:
+  #if defined(DEBUG)
     Serial.println("Device is not a DS18x20 family device.");
+  #endif
     return 0;
   } 
 
@@ -199,37 +202,41 @@ void sendValue(int sensorID, float value) {
     code_log(16);
 
     client.print("POST http://");
-    Serial.print("POST http://");
     client.print(server);
-    Serial.print(server);
     client.print("/measurements?sensor_id=");
-    Serial.print("/measurements?sensor_id=");
     client.print(sensorID);
-    Serial.print(sensorID);
     dtostrf(value, 3, 1, buf);
     client.print("&value=");
-    Serial.print("&value=");
     client.print(buf);
-    Serial.print(buf);
     client.print("&key=");
-    Serial.print("&key=");
     client.print(request_key(buf));
-    Serial.print(request_key(buf));
     client.println(" HTTP/1.0");
-    Serial.println(" HTTP/1.0");
     client.print("Host: ");
-    Serial.print("Host: ");
     client.println(server);
-    Serial.println(server);
     client.println("Content-Length: 0");
-    Serial.println("Content-Length: 0");
     client.println();
+#if defined(DEBUG)
+    Serial.print("POST http://");
+    Serial.print(server);
+    Serial.print("/measurements?sensor_id=");
+    Serial.print(sensorID);
+    Serial.print("&value=");
+    Serial.print(buf);
+    Serial.print("&key=");
+    Serial.print(request_key(buf));
+    Serial.println(" HTTP/1.0");
+    Serial.print("Host: ");
+    Serial.println(server);
+    Serial.println("Content-Length: 0");
     Serial.println();
+#endif
   } 
   else {
     // if you didn't get a connection to the server:
     code_log(17);
+#if defined(DEBUG)
     Serial.println("connection failed");
+#endif
     for(;;)
       ;
   }
@@ -258,15 +265,21 @@ void sendValue(int sensorID, float value) {
     while(client.available()) {
       char c = client.read();
       if (c == msg[msg_cnt++]) {
+#if defined(DEBUG)
         Serial.print(c);
+#endif
         if (msg_cnt == 7) {
           success = true;
+#if defined(DEBUG)
           Serial.println("Success!");
+#endif
         }
       } else {
         msg_cnt = 0;
       }
+#if defined(DEBUG)
       Serial.print(c);
+#endif
     }
   }
   if (success == false) {
@@ -285,11 +298,13 @@ void sendValue(int sensorID, float value) {
 }
 
 void setup() {
-  // start the serial library:
-  Serial.begin(9600);
-  
   // Find out where we crashed
   last_code_log = get_code_log();
+
+  // start the serial library:
+#if defined(DEBUG)
+  Serial.begin(9600);
+#endif  
 
   // Get the connection config values
   getEEPROM();
@@ -298,12 +313,16 @@ void setup() {
   wdt_enable(WDTO_8S);
 
   // start the Ethernet connection, try up to 5 times
+#if defined(DEBUG)
   Serial.println("Attempting to configure Ethernet...");
+#endif
   code_log(1);
   int eth_retry = 0;
   while ((Ethernet.begin(mac) == 0) && (eth_retry < 6)) {
+#if defined(DEBUG)
     Serial.println("Failed to configure Ethernet using DHCP");
     Serial.println("retrying...");
+#endif
     delay_with_wd(5000);
     eth_retry++;
   }
@@ -316,39 +335,52 @@ void setup() {
   // give the Ethernet shield a second to initialize:
   delay_with_wd(1000);
 
+#if defined(DEBUG)
   // Get the sensor config information
   Serial.println("connecting...");
+#endif
+
+  int i = 0;
 
   if (client.connect(server, 80)) {
     code_log(2);
     // Serial.println("connected");
 
     client.print("GET ");
-    Serial.print("GET ");
     client.print("/sensors/getconfig?cntrl=");
-    Serial.print("/sensors/getconfig?cntrl=");
     client.print(controller);
-    Serial.print(controller);
     client.print("&key=");
-    Serial.print("&key=");
     client.print(request_key(controller));
-    Serial.print(request_key(controller));
-    client.print("&log=Code%20restarted%20from%20location%20");
-    Serial.print("&log=Code%20restarted%20from%20location%20");
+    client.print("&log=CodeRestart%7C");
     client.print(last_code_log);
-    Serial.print(last_code_log);
+    client.print("%7CIP%7C");
+    for (i=0;i<4;i++) {
+      client.print(Ethernet.localIP()[i]);
+      if (i<3) client.print(".");
+    }
     client.println(" HTTP/1.0");
-    Serial.println(" HTTP/1.0");
     client.print("Host: ");
-    Serial.print("Host: ");
     client.println(server);
-    Serial.println(server);
     client.println();
+#if defined(DEBUG)
+    Serial.print("GET ");
+    Serial.print("/sensors/getconfig?cntrl=");
+    Serial.print(controller);
+    Serial.print("&key=");
+    Serial.print(request_key(controller));
+    Serial.print("&log=Code%20restarted%20from%20location%20");
+    Serial.print(last_code_log);
+    Serial.println(" HTTP/1.0");
+    Serial.print("Host: ");
+    Serial.println(server);
+#endif
   } 
   else {
     code_log(3);
+#if defined(DEBUG)
     // if you didn't get a connection to the server:
     Serial.println("connection failed");
+#endif
     for(;;)
       ;
   }
@@ -362,25 +394,30 @@ void setup() {
   bool numStarted = false;
   char key[20];
   char value[20];
-  int i = 0;
   while (client.connected()) {
     code_log(4);
     if (client.available()) {
       code_log(5);
       char c = client.read();
+#if defined(DEBUG)
       Serial.print(c);
+#endif
       if (!jsonStarted && (c == '[')) {
         jsonStarted = true;
       } 
       else if (jsonStarted && !objectStarted && (c == '{')) {
         objectStarted = true;
         sensorCount += 1;
+#if defined(DEBUG)
         Serial.println(sensorCount);
+#endif
       } 
       else if (objectStarted && !keyStarted && (c == '"')) {
         keyStarted = true;
         i = 0;
+#if defined(DEBUG)
         Serial.println("keyStart");
+#endif
       } 
       else if (keyStarted && !haveKey && (c != '"')) {
         key[i++] = c;
@@ -388,11 +425,15 @@ void setup() {
       else if (keyStarted && !haveKey && (c == '"')) {
         haveKey = true;
         key[i] = 0x00;
+#if defined(DEBUG)
         Serial.println("haveKey");
+#endif
       } 
       else if (haveKey && !valueStarted && (c != ' ') && (c != ':')) {
         valueStarted = true;
+#if defined(DEBUG)
         Serial.println("valueStart");
+#endif
         if (c != '"') {
           numStarted = true;
           i = 0;
@@ -412,7 +453,9 @@ void setup() {
           if (numStarted && (c == '}')) objectStarted = false;
           numStarted = false;
           keyStarted = false;
+#if defined(DEBUG)
           Serial.println("valueDone");
+#endif
           if (bComp(key,"id")) sensors[sensorCount-1].id = atoi(value);
           else if (bComp(key,"addressH")) sensors[sensorCount-1].addressH = atoi(value);
           else if (bComp(key,"addressL")) sensors[sensorCount-1].addressL = atoi(value);
@@ -439,7 +482,9 @@ void setup() {
     } 
     else {
       code_log(6);
+#if defined(DEBUG)
       Serial.println("No more data, waiting for server to disconnect");
+#endif
       delay_with_wd(1000);
     }
   }
@@ -447,7 +492,9 @@ void setup() {
   while (client.available()) {
     code_log(7);
     char c = client.read();  //Just clean up anything left
+#if defined(DEBUG)
     Serial.print(c);
+#endif
   }
   
   code_log(8);
@@ -456,7 +503,9 @@ void setup() {
   
   if (sensorCount < 1) {
     code_log(9);
+#if defined(DEBUG)
     Serial.println("No sensors received");
+#endif
         for(;;)
       ;
   }
@@ -468,6 +517,7 @@ void setup() {
     if ((sensors[i].interval > 0) && (sensors[i].interval < minInterval)) {
       minInterval = sensors[i].interval;
     }
+#if defined(DEBUG)
     Serial.print(sensors[i].id);
     Serial.print(":");
     Serial.print(sensors[i].addressH);
@@ -477,7 +527,7 @@ void setup() {
     Serial.println(sensors[i].interval);
     Serial.print(":");
     Serial.println(sensors[i].type);
-    
+#endif
   }
 }
 
@@ -492,17 +542,21 @@ void querydsSensors(OneWire ds) {
     bool found = false;
     addrL = (addr[1] << 8) | addr[0];
     addrH = (addr[3] << 8) | addr[2];
+#if defined(DEBUG)
     Serial.print("AddrL: ");
     Serial.print(addrL);
     Serial.print(" AddrH: ");
     Serial.println(addrH);
+#endif
     for (int i=0; (i < sensorCount) && !found; i++) {  //Find the matching config
       if ((sensors[i].type == 1) && (sensors[i].addressL == addrL) && (sensors[i].addressH == addrH)) {  //Found our config
         value = getDSValue(ds, addr);
+#if defined(DEBUG)
         Serial.print("Value: ");
         Serial.println(value);
         Serial.print("Sensor ID: ");
         Serial.println(sensors[i].id);
+#endif
         if (value < 180) {  // Skip spurious startup values
           sendValue(sensors[i].id, value);
         }
@@ -527,10 +581,12 @@ void loop()
   for (int i=0; (i < sensorCount); i++) {
     if (sensors[i].type != 1) {
       float value = analogRead(sensors[i].addressL);   //Pin specified in addressL
+#if defined(DEBUG)
       Serial.print("Value: ");
       Serial.println(value);
       Serial.print("Sensor ID: ");
       Serial.println(sensors[i].id);
+#endif
       sendValue(sensors[i].id, value);
       wdt_reset();
     }
@@ -542,7 +598,9 @@ void loop()
     code_log(13);
     for (int i=0; i < minInterval; i++) {
       delay_with_wd(1000);
+#if defined(DEBUG)
       Serial.println(i);
+#endif
     }
   } else {
     code_log(14);
