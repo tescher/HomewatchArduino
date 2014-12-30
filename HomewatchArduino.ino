@@ -11,8 +11,8 @@
 #define fileKey 12345   //Secret for filing data
 #define ONE_WIRE_PIN 9  //Where the OneWire bus is connected *TWE 4/8/12 - Changed to pin 9 (Ethernet board uses pin 10).
 #define WD_INTERVAL 500  //Milliseconds between each Watchdog Timer reset
-#define CODE_LOG_LOC 100   //Location in the EEPROM where to store the current execution point
-// #define DEBUG         // Conditional Compilation
+#define CODE_LOG_LOC 200   //Location in the EEPROM where to store the current execution point
+#define DEBUG         // Conditional Compilation
 
 // Default config info in case nothing is in the EEPROM
 byte mac[] = { 
@@ -20,6 +20,7 @@ byte mac[] = {
 char server[25] = "www.escherhomewatch.com";   // Up to 24 characters for the server name
 char controller[30] = "BasementArduino";  //ID for this sensor controller, up to 29 chars
 int last_code_log = 255;
+byte current_code_log = 255;
 
 int sensorCount = 0;
 boolean haveOneWire = false;  // Flag to say that we should be getting data from One-Wire sensors
@@ -59,7 +60,27 @@ void delay_with_wd(int ms) {
   wdt_reset();
 }
 
+//initialize watchdog
+void WDT_Init(void) {
+  //disable interrupts
+  cli();
+  //reset watchdog
+  wdt_reset();
+  //set up WDT interrupt
+  WDTCSR = (1<<WDCE)|(1<<WDE);
+  //Start watchdog timer with 8s timeout, interrupt and system reset modes
+  WDTCSR = (1<<WDIE)|(1<<WDE)|(1<<WDP3)|(1<<WDP0);
+  //Enable global interrupts
+  sei();
+}
 
+// WD Interrupt Vector - save log to EEPROM
+
+ISR(WDT_vect) {
+  EEPROM.write(CODE_LOG_LOC, current_code_log);
+  while(1);
+}
+ 
 
 // Get the EEPROM config info
 
@@ -94,7 +115,8 @@ void getEEPROM() {
 // Store a marker where we are so when we restart we can log where we hung up
 
 void code_log(byte location) {
-  EEPROM.write(CODE_LOG_LOC, location);
+  current_code_log = location;
+  // EEPROM.write(CODE_LOG_LOC, location);
 }
 
 int get_code_log() {
@@ -310,7 +332,7 @@ void setup() {
   getEEPROM();
 
   // Start the watchdog
-  wdt_enable(WDTO_8S);
+  WDT_Init();
 
   // start the Ethernet connection, try up to 5 times
 #if defined(DEBUG)
@@ -368,8 +390,13 @@ void setup() {
     Serial.print(controller);
     Serial.print("&key=");
     Serial.print(request_key(controller));
-    Serial.print("&log=Code%20restarted%20from%20location%20");
+    Serial.print("&log=CodeRestarted%7C");
     Serial.print(last_code_log);
+    Serial.print("%7CIP%7C");
+    for (i=0;i<4;i++) {
+      Serial.print(Ethernet.localIP()[i]);
+      if (i<3) Serial.print(".");
+    }
     Serial.println(" HTTP/1.0");
     Serial.print("Host: ");
     Serial.println(server);
