@@ -1,3 +1,10 @@
+#include <Dns.h>
+#include <EthernetServer.h>
+#include <Ethernet.h>
+#include <EthernetClient.h>
+#include <Dhcp.h>
+#include <EthernetUdp.h>
+
 
 #include <SPI.h>
 #include <Ethernet.h>
