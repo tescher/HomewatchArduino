@@ -649,6 +649,7 @@ void loop()
   code_log(12);
   for (int i=0; (i < sensorCount); i++) {
     if (sensors[i].type != 1) {
+      analogRead(sensors[i].addressL); // Get one read to dump the ADC charge from the last read
       float value = analogRead(sensors[i].addressL);   //Pin specified in addressL
       #if defined(DEBUG)
       Serial.print("Value: ");
